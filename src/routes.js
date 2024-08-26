@@ -1,29 +1,117 @@
-const tasks = [
-  {
-    id: 1,
-    title: "Task 1",
-    description: "Desafio ignite",
-    completed_at: null,
-    created_at: "2021-06-23T00:00:00.000Z",
-    updated_at: "2021-06-24T00:00:00.000Z",
-  },
-];
+import { randomUUID } from "node:crypto";
+import { Database } from "./database.js";
+import { buildRoutePath } from "./utils/build-route-path.js";
+import path from "node:path";
+
+const database = new Database();
 
 export const routes = [
   {
     method: "GET",
-    path: "/tasks",
+    path: buildRoutePath("/tasks"),
     handler: (req, res) => {
-      res.writeHead(200);
+      const { search } = req.query;
+
+      const tasks = database.select(
+        "tasks",
+        search
+          ? {
+              title: search,
+              description: search,
+            }
+          : null
+      );
+
       return res.end(JSON.stringify(tasks));
     },
   },
   {
     method: "POST",
-    path: "/tasks",
+    path: buildRoutePath("/tasks"),
     handler: (req, res) => {
-      console.log(req.body);
+      if (!req.body?.title || !req.body?.description) {
+        return res
+          .writeHead(400)
+          .end(JSON.stringify({ error: "Title and description are required" }));
+      }
+
+      const { title, description } = req.body;
+
+      console.log(title, description);
+
+      const task = {
+        id: randomUUID(),
+        title,
+        description,
+        completed_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      database.insert("tasks", task);
+
       return res.writeHead(201).end();
+    },
+  },
+  {
+    method: "PUT",
+    path: buildRoutePath("/tasks/:id"),
+    handler: (req, res) => {
+      const { id } = req.params;
+      const { title, description } = req.body;
+
+      if (!title && !description) {
+        return res
+          .writeHead(400)
+          .end(JSON.stringify({ error: "Title or description is required" }));
+      }
+
+      const [task] = database.select("tasks", { id });
+
+      database.update("tasks", id, {
+        title: title ?? task.title,
+        description: description ?? task.description,
+        updated_at: new Date().toISOString(),
+      });
+
+      return res.writeHead(204).end();
+    },
+  },
+  {
+    method: "DELETE",
+    path: buildRoutePath("/tasks/:id"),
+    handler: (req, res) => {
+      const { id } = req.params;
+
+      const [task] = database.select("tasks", { id });
+
+      if (!task) {
+        return res.writeHead(404).end();
+      }
+
+      database.delete("tasks", id);
+
+      return res.writeHead(204).end();
+    },
+  },
+  {
+    method: "PATCH",
+    path: buildRoutePath("/tasks/:id/complete"),
+    handler: (req, res) => {
+      const { id } = req.params;
+
+      const [task] = database.select("tasks", { id });
+
+      if (!task) {
+        return res.writeHead(404).end();
+      }
+
+      database.update("tasks", id, {
+        completed_at: task?.completed_at ? null : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+
+      return res.writeHead(204).end();
     },
   },
 ];
